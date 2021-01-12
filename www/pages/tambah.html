@@ -1,0 +1,335 @@
+<template>
+    <div class="page">
+        <div class="navbar">
+            <div class="navbar-bg"></div>
+            <div class="navbar-inner">
+                <div class="left">
+                    <a class="link back">
+                        <i class="icon f7-icons">arrow_left</i>
+                    </a>
+                </div>
+                <div class="title">Tambah Data</div>
+            </div>
+        </div>
+
+        <div class="page-content">
+            <form id="detailForm">
+                <div class="list no-hairlines-md">
+                    <ul>
+                        <li class="item-content item-input">
+                            <div class="item-inner">
+                                <div class="item-title item-label">Nama</div>
+                                <div class="item-input-wrap">
+                                    <input type="text" name="nama" placeholder="Masukkan nama" required validate
+                                        data-error-message="Nama belum diisi">
+                                    <span class="input-clear-button"></span>
+                                </div>
+                            </div>
+                        </li>
+                        <li class="item-content item-input">
+                            <div class="item-inner">
+                                <div class="item-title item-label">Alamat</div>
+                                <div class="item-input-wrap">
+                                    <textarea type="text" name="alamat" class="resizable" placeholder="Masukkan alamat"
+                                        required validate data-error-message="Alamat belum diisi"></textarea>
+                                    <span class="input-clear-button"></span>
+                                </div>
+                            </div>
+                        </li>
+                        <li>
+                            <a class="item-link smart-select smart-select-init" data-open-in="sheet">
+                                <select name="jenis_kelamin">
+                                    <option value="Laki-laki" selected>Laki-laki</option>
+                                    <option value="Perempuan">Perempuan</option>
+                                </select>
+                                <div class="item-content">
+                                    <div class="item-inner">
+                                        <div class="item-title text-color-gray">Jenis Kelamin</div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <div class="item-content item-input">
+                                <div class="item-inner">
+                                    <div class="item-title item-label">Tanggal Lahir</div>
+                                    <div class="item-input-wrap">
+                                        <input type="text" placeholder="Pilih tanggal" readonly name="tanggal_lahir"
+                                            id="tanggal_lahir" required validate
+                                            data-error-message="Tanggal lahir belum diisi" />
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+
+                    </ul>
+                </div>
+                <div class="block">
+                    <a class="col-100 medium-50 button button-fill button-round" href="#" @click="onSubmit">Lanjut</a>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</template>
+<script>
+    return {
+        data: function () {
+            return {
+                photoBrowser: null,
+                images: [],
+                isFace: []
+            }
+        },
+        on: {
+            pageInit: function () {
+                app.calendar.create({
+                    inputEl: '#tanggal_lahir',
+                    openIn: 'customModal',
+                    dateFormat: 'dd-mm-yyyy',
+                    closeOnSelect: true
+                });
+
+                this.actionPhoto = app.actions.create({
+                    buttons: [{
+                            text: 'Silahkan pilih gambar',
+                            label: true
+                        },
+                        {
+                            text: 'Buka Kamera',
+                            icon: '<i class="icon f7-icons text-color-blue">camera</i>',
+                            onClick: () => {
+                                this.openCamera()
+                            }
+                        },
+                        {
+                            text: 'Buka Galeri',
+                            icon: '<i class="icon f7-icons text-color-blue">photo_on_rectangle</i>',
+                            onClick: () => {
+                                this.openGaleri()
+                            }
+                        },
+                        {
+                            text: 'Batal',
+                            color: 'red'
+                        },
+                    ]
+                })
+
+                this.actionSimpan = app.actions.create({
+                    buttons: [{
+                            text: 'Data akan disimpan?',
+                            label: true
+                        },
+                        {
+                            text: 'Simpan',
+                            icon: '<i class="icon f7-icons text-color-blue">checkmark_alt</i>',
+                            onClick: this.simpanData
+                        },
+                        {
+                            text: 'Batal',
+                            icon: '<i class="icon f7-icons text-color-red">xmark</i>'
+                        },
+                    ]
+                })
+
+                this.dialogError = app.dialog.create({
+                    content: `<center>
+                                <lottie-player src="./assets/error-animasi.json" background="transparent" speed="1"
+                                    style="width: 200px; height: 200px;" loop autoplay>
+                                </lottie-player>
+                            </center>
+                            <h3 class="text-align-center">Tidak dapat mendeteksi wajah di foto yang anda masukkan!</h3>`,
+                    on: {
+                        'opened': function () {
+                            setTimeout(app.dialog.close, 3000);
+                        }
+                    }
+                })
+            }
+        },
+        methods: {
+            onSubmit: function () {
+                const form = $('#detailForm');
+
+                if (!form[0].checkValidity()) {
+                    return;
+                }
+
+                this.initPhotoBrowser()
+
+                this.actionPhoto.open()
+            },
+            openCamera: function (selection) {
+                const options = {
+                    quality: 100,
+                    destinationType: Camera.DestinationType.DATA_URL, //Base64 return
+                    sourceType: Camera.PictureSourceType.CAMERA,
+                    encodingType: Camera.EncodingType.JPEG,
+                    mediaType: Camera.MediaType.PICTURE,
+                    allowEdit: false,
+                    correctOrientation: true, //Corrects Android orientation quirks
+                    targetHeight: 800,
+                    targetWidth: 800
+                }
+
+                navigator.camera.getPicture((imageUri) => {
+                    this.createPhotoBrowser([imageUri])
+
+                }, (error) => {
+                    console.debug("Unable to obtain picture: " + error, "app");
+
+                }, options);
+            },
+            openGaleri: function () {
+                window.imagePicker.getPictures(
+                    (results) => {
+                        if (results.length != 0) {
+                            this.createPhotoBrowser(results)
+                        }
+                    },
+                    (error) => {
+                        console.log('Error: ' + error);
+                    }, {
+                        maximumImagesCount: 2 - this.images.length,
+                        height: 800,
+                        width: 800,
+                        quality: 100,
+                        outputType: 1 //Base64 return
+                    }
+                );
+            },
+            initPhotoBrowser: function () {
+                const self = this;
+
+                this.photoBrowser = app.photoBrowser.create({
+                    theme: 'dark',
+                    type: 'page',
+                    navbarOfText: 'dari',
+                    on: {
+                        opened: () => {
+                            $('.photo-browser-page').append(`<div id="fabTambah" class="fab fab-right-bottom color-white"
+                                style="bottom:100px">
+                                <a href="#" id="fabTambah">
+                                    <i class="icon f7-icons color-blue">plus</i>
+                                </a>
+                            </div>`)
+
+                            $('.photo-browser-page').append(`<div id="fabSimpan" class="fab fab-extended fab-right-bottom color-white"
+                                style="bottom:40px">
+                                <a href="#">
+                                    <i class="icon f7-icons color-blue">checkmark_alt</i>
+                                    <div class="fab-text text-color-blue">Simpan</div>
+                                </a>
+                            </div>`)
+
+                            this.hideButton()
+
+                            $('#fabTambah').on('click', this.actionPhoto.open)
+
+                            $('#fabSimpan').on('click', this.actionSimpan.open)
+                        },
+                        closed: function () {
+                            this.destroy()
+                            self.images = []
+                            self.isFace = []
+                        }
+                    }
+                })
+            },
+            createPhotoBrowser: async function (images) {
+                app.dialog.preloader('Sedang memeriksa foto...');
+
+                this.images.push(...images)
+
+                let photos = []
+
+                await Promise.all(images.map(async image => {
+                    const check = await this.checkPhoto(image)
+
+                    this.isFace.push(check)
+
+                    photos.push({
+                        html: `<img src="data:image/jpeg;base64,${image}">`,
+                        caption: !check ? 'Tidak ada wajah yang terdeteksi' :
+                            'Anda dapat menambah hingga 2 foto untuk meningkatkan akurasi deteksi'
+                    })
+                }))
+
+                app.dialog.close();
+
+                console.log(photos);
+                console.log(this.isFace);
+
+                if (!this.photoBrowser.opened) {
+                    if (this.images.length == 1)
+                        this.photoBrowser.params.navbarShowCount = '1 dari 1'
+
+                    this.photoBrowser.params.photos = photos
+                    this.photoBrowser.open()
+                    return
+                }
+
+                this.photoBrowser.params.photos.push(...photos)
+
+                this.photoBrowser.swiper.slideTo(this.images.length)
+                this.photoBrowser.swiper.update()
+
+                this.hideButton()
+            },
+            checkPhoto: async function (image) {
+                const img = await faceapi.fetchImage(
+                    `data:image/jpeg;base64,${image}`)
+                const detections = await faceapi
+                    .detectSingleFace(img,
+                        new faceapi
+                        .TinyFaceDetectorOptions())
+                    .withFaceLandmarks(true)
+                    .withFaceDescriptor()
+
+                return detections ? true : false
+            },
+            hideButton: function () {
+                const check = this.isFace.some(e => e == false)
+
+                if (check) {
+                    this.dialogError.open()
+                    $('#fabTambah').hide()
+                    $('#fabSimpan').hide()
+                    return
+                }
+
+                if (this.images.length >= 2)
+                    $('#fabTambah').hide()
+            },
+            simpanData: function () {
+                const formData = app.form.convertToData('#detailForm')
+                const generateID = app.utils.id('xxxx-xxxx-xxxx-xxxx')
+
+                const {
+                    nama,
+                    alamat,
+                    jenis_kelamin,
+                    tanggal_lahir
+                } = formData
+
+                let user = new User(generateID, nama, alamat, jenis_kelamin, tanggal_lahir, JSON
+                    .stringify(this
+                        .images))
+
+                app.emit('insertDB', user.get());
+
+                // this.photoBrowser.close()
+
+                // setTimeout(() => {
+                //     app.views.main.router.back('/');
+                // }, 500);
+
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            }
+
+        }
+    }
+</script>

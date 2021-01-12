@@ -1,0 +1,590 @@
+<template>
+    <div class="page">
+        <div class="navbar">
+            <div class="navbar-bg"></div>
+            <div class="navbar-inner">
+                <div class="left">
+                    <a class="link" href="#">
+                        <img data-src="./assets/logo.png" class="lazy lazy-fade-in" width="35px" height="35px">
+                    </a>
+                </div>
+                <div class="title">Deteksi Wajah</div>
+                <div class="right">
+                    <a href="#" class="button button-small panel-toggle display-flex" data-panel="left"
+                        @click="refreshPage">
+                        <i class="f7-icons">repeat</i>
+                    </a>
+                    <a href="#" class="button button-small display-flex margin-left-half popover-open" href="#"
+                        data-popover=".popover-links">
+                        <i class="f7-icons">ellipsis_vertical</i>
+                    </a>
+
+                </div>
+            </div>
+        </div>
+        <!-- Floating Action Button -->
+        <div class="fab fab-left-bottom">
+            <a href="#" class="{{#if loading}}bg-color-white{{else}}bg-color-transparent{{/if}}" @click="cameraControl">
+                <lottie-player id="iconControl" src="./assets/loading-animasi.json" background="transparent" speed="1"
+                    style="width: 30px; height: 30px;" loop autoplay>
+                </lottie-player>
+            </a>
+        </div>
+        {{#js_if "this.btnAksi == 'play'"}}
+        <div class="fab fab-right-bottom">
+            <a href="/tambah/">
+                <lottie-player src="./assets/add-button-animasi.json" background="transparent" speed="1"
+                    style="width: 60px; height: 60px;" loop autoplay>
+                </lottie-player>
+            </a>
+        </div>
+        {{/js_if}}
+        <!-- Page Content -->
+        <div class="page-content display-flex flex-direction-column justify-content-center">
+            <div id="container" class="display-flex justify-content-center">
+                <video id="video" width="auto" height="auto" muted style="display: none;"></video>
+            </div>
+            <div id="keterangan" class="block">
+                {{#if first}}
+                <center>
+                    <lottie-player src="./assets/face-animasi.json" class="text-align-center" background="transparent"
+                        speed="1" style="width: 300px; height: 300px;" loop autoplay></lottie-player>
+                </center>
+                <p>
+                    <h3 class="text-align-center">Silahkan klik pada tombol mulai untuk menyalakan kamera</h3>
+                </p>
+                {{else}}
+                {{#js_if "this.btnAksi == 'play'"}}
+                <img id="preview" src="">
+
+                <div id="cardBiodata" class="card">
+                    <div class="card-header"><b>Biodata</b></div>
+                    <div class="card-content card-content-padding">
+                        {{#js_if "Object.keys(this.user).length == 0"}}
+                        <center>
+                            <lottie-player src="./assets/empty-animasi.json" class="text-align-center"
+                                background="transparent" speed="1" style="width: 200px; height: 200px;" loop autoplay>
+                            </lottie-player>
+                        </center>
+                        <h3 class="text-align-center">Data wajah belum terdaftar</h3>
+                        {{else}}
+                        <p><b>Nama</b> : {{user.nama}}</p>
+                        <p><b>Alamat</b> : {{user.alamat}}</p>
+                        <p><b>Jenis Kelamin</b> : {{user.jenis_kelamin}}</p>
+                        <p><b>Tanggal Lahir</b> : {{user.tanggal_lahir}}</p>
+                        {{/js_if}}
+                    </div>
+                </div>
+                {{/if}}
+                {{/if}}
+            </div>
+        </div>
+        <!-- PopOver -->
+        <div class="popover popover-links">
+            <div class="popover-inner">
+                <div class="list">
+                    <ul>
+                        <li><a class="list-button item-link" href="#" @click="toDaftarData">
+                                <i class="icon f7-icons color-blue" style="font-size: 20px;">eye</i>
+                                Lihat Daftar Data</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+<style>
+    canvas {
+        position: absolute;
+    }
+
+    #preview {
+        width: 400px;
+        -webkit-transition: -webkit-transform 0.6s;
+        transition: transform 0.6s;
+    }
+
+    #cardBiodata {
+        -webkit-transition: -webkit-transform 1.5s;
+        transition: transform 1.5s;
+        transform: scale(0);
+        top: -250px
+    }
+</style>
+<script>
+    return {
+        data: function () {
+            return {
+                btnAksi: 'play',
+                first: true,
+                loading: true,
+                paused: false,
+                detections: [],
+                user: {}
+            }
+        },
+        on: {
+            pageInit: function () {
+                // Deklarasi screen size
+                this.clientWidth = document.documentElement.clientWidth
+                this.clientHeight = document.documentElement.clientHeight - $('.navbar')[0].clientHeight
+
+                // Deklarasi Element
+                this.container = document.getElementById("container")
+                this.video = document.getElementById("video")
+
+                // Initialise DB
+                this.initDB()
+
+                // Load data
+                this.loadDB()
+
+                // Load model untuk face recognition (face-api.js)
+                this.loadFaceDetectModels().then(() => {
+                    this.$setState({
+                        loading: false
+                    }, () => this.setIconControl('play'))
+                })
+
+                // Buat event listener untuk video
+                this.video.onplaying = (event) => {
+                    this.$setState({
+                        loading: false,
+                        paused: false
+                    }, () => {
+                        this.setIconControl('pause')
+
+                        if (this.first) {
+                            this.recognizeFaces()
+                            return
+                        }
+
+                        this.video.style.display = "block";
+                        $('#container canvas').show()
+                        $('#keterangan').hide()
+
+                        preview.style.webkitTransform = ''
+                        preview.style.transform = ''
+
+                        cardBiodata.style.webkitTransform = ``;
+                        cardBiodata.style.transform = ``;
+                    })
+                };
+
+                // Buat event listener untuk video
+                this.video.onpause = async (event) => {
+                    this.$setState({
+                        loading: false,
+                        paused: true,
+                    }, async () => {
+                        this.setIconControl('play')
+                        this.video.style.display = "none";
+
+                        $('#container canvas').hide()
+                        $('#keterangan').show()
+
+                        if (this.detections.length > 0) {
+                            this.extractFaceFromBox(this.video, this.detections[0].detection
+                                .box)
+                        }
+                    })
+                };
+
+                // Create toast 
+                this.toastDetection = app.toast.create({
+                    text: 'Tidak ada wajah yang terdeteksi',
+                    position: 'center',
+                    closeTimeout: 2000,
+                });
+
+                // Create Dialog
+                this.dialogSuccess = app.dialog.create({
+                    content: `<center>
+                                <lottie-player src="./assets/success-animasi.json" background="transparent" speed="1"
+                                    style="width: 200px; height: 200px;" autoplay>
+                                </lottie-player>
+                            </center>
+                            <h3 class="text-align-center"></h3>`,
+                    on: {
+                        'open-custom': function (text) {
+                            this.$el.children().children()[1].textContent = text
+                            this.open()
+
+                            setTimeout(app.dialog.close, 3000);
+                        }
+                    }
+                })
+
+                this.dialogError = app.dialog.create({
+                    content: `<center>
+                                <lottie-player src="./assets/error-animasi.json" background="transparent" speed="1"
+                                    style="width: 200px; height: 200px;" loop autoplay>
+                                </lottie-player>
+                            </center>
+                            <h3 class="text-align-center"></h3>`,
+                    on: {
+                        'open-custom': function (text) {
+                            this.$el.children().children()[1].textContent = text
+                            this.open()
+
+                            setTimeout(app.dialog.close, 3000);
+                        }
+                    }
+                })
+
+                // Buat event untuk Global Function
+                this.$app.on('insertDB', this.insertDB);
+                this.$app.on('deleteDB', this.deleteDB);
+                this.$app.on('deleteAllDB', this.deleteAllDB);
+            },
+            pageBeforeRemove: function () {
+                this.$app.off('insertDB', this.insertDB);
+                this.$app.off('deleteDB', this.deleteDB);
+                this.$app.off('deleteAllDB', this.deleteDB);
+            }
+        },
+        methods: {
+            initDB: function () {
+                // Buat Table jika belum ada
+                db.transaction(tx =>
+                    tx.executeSql(
+                        'CREATE TABLE IF NOT EXISTS tbl_data (id, nama, alamat, jenis_kelamin, tanggal_lahir, foto)'
+                    )
+                );
+            },
+            loadDB: function () {
+                // deklarasi data user
+                this.users = []
+
+                // ambil daftar user dari db
+                db.executeSql('SELECT * FROM tbl_data', [], rs => {
+                    for (let i = 0; i < rs.rows.length; i++) {
+                        this.users.push(rs.rows.item(i));
+                    }
+                    console.log(this.users);
+                }, error => this.errorDB(error, `diload : (${error.message})`));
+            },
+            insertDB: function (data) {
+                db.transaction(tx =>
+                    tx.executeSql('INSERT INTO tbl_data VALUES (?,?,?,?,?,?)', data),
+                    error => this.errorDB(error, 'disimpan'),
+                    this.successDB('disimpan'));
+            },
+            deleteDB: function (id) {
+                db.transaction(tx => {
+                        tx.executeSql("DELETE FROM tbl_data WHERE id = ?", [id], function (tx, res) {
+                                console.log("removeId: " + res.insertId);
+                                console.log("rowsAffected: " + res.rowsAffected);
+                            },
+                            function (tx, error) {
+                                console.log('DELETE error: ' + error.message);
+                            });
+                    },
+                    error => this.errorDB(error, 'dihapus'),
+                    this.successDB('dihapus'));
+            },
+            deleteAllDB: function () {
+                db.transaction(tx =>
+                    tx.executeSql('DELETE FROM tbl_data'),
+                    error => this.errorDB(error, 'dihapus'),
+                    this.successDB('dihapus'));
+            },
+            errorDB: function (error, text) {
+                this.dialogError.emit('open-custom', `Data gagal ${text}`)
+                console.log(error);
+            },
+            successDB: function (text) {
+                this.dialogSuccess.emit('open-custom', `Data berhasil ${text}`)
+            },
+            async loadFaceDetectModels() {
+                const MODEL_URL = window.cordova.file.applicationDirectory + "www/models/";
+
+                // fungsi untuk load file model di sistem android
+                faceapi.env.monkeyPatch({
+                    readFile: filePath =>
+                        new Promise(resolve => {
+                            window.resolveLocalFileSystemURL(filePath, function (
+                                    fileEntry) {
+                                    fileEntry.file(
+                                        function (file) {
+                                            const reader = new FileReader();
+
+                                            const fileExtension = filePath
+                                                .split("?")[0]
+                                                .split(".")
+                                                .pop();
+                                            if (fileExtension === "json") {
+                                                reader.onloadend = function () {
+                                                    resolve(this.result);
+                                                };
+                                                reader.readAsText(file);
+                                            } else {
+                                                reader.onloadend = function () {
+                                                    resolve(new Uint8Array(this
+                                                        .result));
+                                                };
+
+                                                reader.readAsArrayBuffer(file);
+                                            }
+                                        },
+                                        function () {
+                                            resolve(false);
+                                        }
+                                    );
+                                },
+                                function () {
+                                    resolve(false);
+                                }
+                            );
+                        }),
+                    Canvas: HTMLCanvasElement,
+                    Image: HTMLImageElement,
+                    ImageData: ImageData,
+                    Video: HTMLVideoElement,
+                    createCanvasElement: () => document.createElement("canvas"),
+                    createImageElement: () => document.createElement("img")
+                });
+
+                await faceapi.nets.tinyFaceDetector.loadFromDisk(MODEL_URL);
+                await faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_URL);
+                await faceapi.nets.faceLandmark68TinyNet.loadFromDisk(MODEL_URL)
+                // await faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_URL)
+                // await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_URL)
+            },
+            start: function () {
+                navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        width: {
+                            ideal: this.clientHeight
+                        },
+                        height: {
+                            ideal: this.clientWidth
+                        },
+                        facingMode: 'user'
+                    }
+                }).then((stream) => {
+                    this.video.srcObject = stream;
+                }).catch((err0r) => {
+                    console.log(err0r)
+                });
+            },
+            recognizeFaces: async function () {
+                const labeledDescriptors = await this.loadLabeledImages()
+                const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5)
+
+                $('#keterangan').hide()
+                this.video.style.display = "block";
+
+                this.first = false
+
+                const canvas = faceapi.createCanvasFromMedia(this.video)
+                this.container.append(canvas);
+
+                const displaySize = {
+                    width: this.video.videoWidth,
+                    height: this.video.videoHeight
+                }
+
+                faceapi.matchDimensions(canvas, displaySize)
+
+                const inputSize = 160,
+                    scoreThreshold = 0.5
+
+                this.detectionInterval = setInterval(async () => {
+                    if (this.loading || this.paused) return
+
+                    this.detections = await faceapi.detectAllFaces(this.video,
+                            new faceapi.TinyFaceDetectorOptions({
+                                inputSize,
+                                scoreThreshold
+                            }))
+                        .withFaceLandmarks(true)
+                        .withFaceDescriptors()
+
+                    const resizedDetections = faceapi.resizeResults(this.detections,
+                        displaySize)
+
+                    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
+
+                    const results = resizedDetections.map((d) => {
+                        return faceMatcher.findBestMatch(d.descriptor)
+                    })
+
+                    let label, boxColor;
+
+                    results.forEach((result, i) => {
+                        label = 'Wajah tidak dikenali'
+                        boxColor = 'rgba(245, 84, 44)'
+
+                        const newLabel = result.label.split(' | ')
+                        const [index, id, nama] = newLabel;
+
+                        if (result.label != 'unknown') {
+                            label = nama
+                            boxColor = 'rgba(44, 222, 9)';
+
+                            this.user = this.users[index]
+                        } else {
+                            this.user = {}
+                        }
+
+                        const {
+                            x,
+                            y,
+                            width,
+                            height
+                        } = resizedDetections[i].detection.box
+
+                        const drawBox = new faceapi.draw.DrawBox({
+                            x: x + 30,
+                            y,
+                            width: width - 50,
+                            height
+                        }, {
+                            boxColor,
+                            label,
+                            lineWidth: 5
+                        })
+
+                        drawBox.draw(canvas)
+
+                    })
+                }, 300)
+
+            },
+            loadLabeledImages: function () {
+                return Promise.all(
+                    this.users.map(async (user, i) => {
+                        const descriptions = []
+                        const images = JSON.parse(user.foto)
+
+                        images.map(async image => {
+                            const img = await faceapi.fetchImage(
+                                `data:image/jpeg;base64,${image}`)
+                            const detections = await faceapi
+                                .detectSingleFace(img,
+                                    new faceapi
+                                    .TinyFaceDetectorOptions())
+                                .withFaceLandmarks(true)
+                                .withFaceDescriptor()
+
+                            descriptions.push(detections.descriptor)
+                        })
+                        return new faceapi.LabeledFaceDescriptors(`${i} | ${user.id} | ${user.nama}`,
+                            descriptions)
+                    })
+                )
+            },
+            extractFaceFromBox: async function (inputImage, box) {
+                const regionsToExtract = [
+                    new faceapi.Rect(box.x + 30, box.y, box.width - 50, box.height)
+                ]
+
+                let faceImages = await faceapi.extractFaces(inputImage, regionsToExtract)
+
+                if (faceImages.length == 0) {
+                    console.log('Face not found')
+                    return
+                }
+
+                faceImages.forEach(cnv => {
+                    preview.src = cnv.toDataURL();
+                })
+
+                let h = $('.page-content')[0].clientHeight,
+                    hh = '';
+
+                if (Object.keys(this.user).length == 0) {
+                    hh = `translateY(90px)`
+                    h += -200
+                }
+
+                preview.style.webkitTransform =
+                    `scale(0.5) rotate(0.01deg) translateY(-${h-550}px)`;
+                preview.style.transform =
+                    `scale(0.5) rotate(0.01deg) translateY(-${h-550}px)`;
+
+                cardBiodata.style.webkitTransform =
+                    `scale(1) rotate(0.01deg) ${hh}`;
+                cardBiodata.style.transform =
+                    `scale(1) rotate(0.01deg) ${hh}`;
+            },
+            cameraControl: function () {
+                if (this.loading) return
+
+                this.loading = true
+
+                if (this.btnAksi == 'play') {
+                    if (!this.users.length) {
+                        this.dialogError.emit('open-custom',
+                            `Belum ada data wajah yang tersimpan, silahkan tambahkan data terlebih dahulu`)
+                        this.loading = false
+                        return
+                    }
+
+                    this.btnAksi = 'pause'
+                    this.video.play()
+
+                    if (this.first) this.start()
+
+                } else {
+                    if (!this.detections.length) {
+                        this.toastDetection.open()
+                        this.loading = false
+                        return
+                    }
+
+                    this.btnAksi = 'play'
+                    this.video.pause()
+                }
+
+                this.setIconControl('loading')
+
+                this.$update();
+            },
+            setIconControl: function (control) {
+                let src,
+                    width = '70px',
+                    height = '70px'
+
+                switch (control) {
+                    case 'loading':
+                        src = './assets/loading-animasi.json'
+                        width = '30px'
+                        height = '30px'
+                        break;
+                    case 'play':
+                        src = './assets/play-button-animasi.json'
+                        break;
+                    case 'pause':
+                        src = './assets/stop-button-animasi.json'
+                        break;
+                }
+
+                const iconControl = document.querySelector("#iconControl");
+
+                iconControl.style.width = width
+                iconControl.style.height = height
+                iconControl.load(src);
+            },
+            toDaftarData: function () {
+                app.popover.close('.popover', true)
+
+                if (!this.users.length) {
+                    this.dialogError.emit('open-custom',
+                        `Belum ada data wajah yang tersimpan, silahkan tambahkan data terlebih dahulu`)
+                    return
+                }
+                app.views.main.router.navigate('/data/')
+            },
+            refreshPage: function () {
+                // if (this.btnAksi == 'play') this.video.pause()
+
+                // clearInterval(this.detectionInterval);
+                // app.views.main.router.refreshPage();
+                location.reload();
+            }
+        }
+    }
+</script>

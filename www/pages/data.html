@@ -1,0 +1,135 @@
+<template>
+    <div class="page" id="iklanPage">
+        <div class="navbar">
+            <div class="navbar-bg"></div>
+            <div class="navbar-inner">
+                <div class="left">
+                    <a class="link back">
+                        <i class="icon f7-icons">arrow_left</i>
+                    </a>
+                </div>
+                <div class="title">Daftar Data</div>
+                <div class="right">
+                    <a href="#" @click="actionAll" class="button button-small panel-toggle display-flex"
+                        data-panel="left">
+                        <i class="f7-icons">trash</i> Hapus semua
+                    </a>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="page-content">
+            <div class="list media-list">
+                <ul>
+                    {{#each users}}
+                    <li class="swipeout" data-id="{{id}}">
+                        <div class="swipeout-content">
+                            <a href="#" class="item-link item-content">
+                                <div class="item-inner">
+                                    <div class="item-title-row">
+                                        <div class="item-title">{{nama}}</div>
+                                    </div>
+                                    <div class="item-subtitle">
+                                        <p><b>Alamat</b> : {{alamat}}</p>
+                                        <p><b>Jenis Kelamin</b> : {{jenis_kelamin}}</p>
+                                        <p><b>Tanggal Lahir</b> : {{tanggal_lahir}}</p>
+                                    </div>
+                                    <!-- <div class="item-text">
+                                        <b>Alamat</b> : {{alamat}}
+                                        <br>
+                                        <b>Tanggal Lahir</br> : {{tanggal_lahir}}
+                                    </div> -->
+                                </div>
+                            </a>
+                        </div>
+                        <div class="swipeout-actions-right">
+                            <a href="#" @click="action.open" class="swipeout-overswipe color-red"><i
+                                    class="icon f7-icons">trash</i>
+                                &nbsp;Hapus</a>
+                        </div>
+                    </li>
+                    {{/each}}
+                </ul>
+            </div>
+        </div>
+    </div>
+</template>
+<script>
+    return {
+        data: function () {
+            return {
+                users: []
+            }
+        },
+        on: {
+            pageInit: function () {
+                this.loadDB()
+
+                this.action = app.actions.create({
+                    buttons: [{
+                            text: 'Data akan dihapus?',
+                            label: true
+                        },
+                        {
+                            text: 'Hapus',
+                            icon: '<i class="icon f7-icons text-color-red">trash</i>',
+                            onClick: this.aksiHapus
+                        },
+                        {
+                            text: 'Batal',
+                            icon: '<i class="icon f7-icons text-color-blue">xmark</i>'
+                        },
+                    ]
+                })
+            },
+        },
+        methods: {
+            loadDB: function () {
+                // ambil daftar user dari db
+                db.executeSql('SELECT * FROM tbl_data', [], rs => {
+                    for (let i = 0; i < rs.rows.length; i++) {
+                        this.users.push(rs.rows.item(i));
+                    }
+                    this.$update()
+                    console.log(this.users);
+                }, error => console.log(error));
+            },
+            aksiHapus: function () {
+                const target = $(app.swipeout.el)
+                const id = target.data('id')
+
+                app.emit('deleteDB', id)
+
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            },
+            actionAll: function () {
+                app.actions.create({
+                    buttons: [{
+                            text: 'Semua data akan dihapus?',
+                            label: true
+                        },
+                        {
+                            text: 'Hapus',
+                            icon: '<i class="icon f7-icons text-color-red">trash</i>',
+                            onClick: this.hapusSemua
+                        },
+                        {
+                            text: 'Batal',
+                            icon: '<i class="icon f7-icons text-color-blue">xmark</i>'
+                        },
+                    ]
+                }).open()
+            },
+            hapusSemua: function () {
+                app.emit('deleteAllDB')
+
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            }
+        }
+    }
+</script>
