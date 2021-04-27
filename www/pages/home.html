@@ -51,7 +51,7 @@
                         speed="1" style="width: 300px; height: 300px;" loop autoplay></lottie-player>
                 </center>
                 <p>
-                    <h3 class="text-align-center">Silahkan klik pada tombol mulai untuk menyalakan kamera</h3>
+                <h3 class="text-align-center">Silahkan klik pada tombol mulai untuk menyalakan kamera</h3>
                 </p>
                 {{else}}
                 {{#js_if "this.btnAksi == 'play'"}}
@@ -84,9 +84,12 @@
             <div class="popover-inner">
                 <div class="list">
                     <ul>
-                        <li><a class="list-button item-link" href="#" @click="toDaftarData">
-                                <i class="icon f7-icons color-blue" style="font-size: 20px;">eye</i>
-                                Lihat Daftar Data</a></li>
+                        <li>
+                            <a class="list-button item-link" href="#" @click="toDaftarData">
+                                <i class="icon f7-icons color-blue" style="font-size: 20px;">eye</i>&nbsp;
+                                Lihat Daftar Data
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -272,14 +275,14 @@
             },
             deleteDB: function (id) {
                 db.transaction(tx => {
-                        tx.executeSql("DELETE FROM tbl_data WHERE id = ?", [id], function (tx, res) {
-                                console.log("removeId: " + res.insertId);
-                                console.log("rowsAffected: " + res.rowsAffected);
-                            },
-                            function (tx, error) {
-                                console.log('DELETE error: ' + error.message);
-                            });
+                    tx.executeSql("DELETE FROM tbl_data WHERE id = ?", [id], function (tx, res) {
+                        console.log("removeId: " + res.insertId);
+                        console.log("rowsAffected: " + res.rowsAffected);
                     },
+                        function (tx, error) {
+                            console.log('DELETE error: ' + error.message);
+                        });
+                },
                     error => this.errorDB(error, 'dihapus'),
                     this.successDB('dihapus'));
             },
@@ -304,34 +307,34 @@
                     readFile: filePath =>
                         new Promise(resolve => {
                             window.resolveLocalFileSystemURL(filePath, function (
-                                    fileEntry) {
-                                    fileEntry.file(
-                                        function (file) {
-                                            const reader = new FileReader();
+                                fileEntry) {
+                                fileEntry.file(
+                                    function (file) {
+                                        const reader = new FileReader();
 
-                                            const fileExtension = filePath
-                                                .split("?")[0]
-                                                .split(".")
-                                                .pop();
-                                            if (fileExtension === "json") {
-                                                reader.onloadend = function () {
-                                                    resolve(this.result);
-                                                };
-                                                reader.readAsText(file);
-                                            } else {
-                                                reader.onloadend = function () {
-                                                    resolve(new Uint8Array(this
-                                                        .result));
-                                                };
+                                        const fileExtension = filePath
+                                            .split("?")[0]
+                                            .split(".")
+                                            .pop();
+                                        if (fileExtension === "json") {
+                                            reader.onloadend = function () {
+                                                resolve(this.result);
+                                            };
+                                            reader.readAsText(file);
+                                        } else {
+                                            reader.onloadend = function () {
+                                                resolve(new Uint8Array(this
+                                                    .result));
+                                            };
 
-                                                reader.readAsArrayBuffer(file);
-                                            }
-                                        },
-                                        function () {
-                                            resolve(false);
+                                            reader.readAsArrayBuffer(file);
                                         }
-                                    );
-                                },
+                                    },
+                                    function () {
+                                        resolve(false);
+                                    }
+                                );
+                            },
                                 function () {
                                     resolve(false);
                                 }
@@ -395,10 +398,10 @@
                     if (this.loading || this.paused) return
 
                     this.detections = await faceapi.detectAllFaces(this.video,
-                            new faceapi.TinyFaceDetectorOptions({
-                                inputSize,
-                                scoreThreshold
-                            }))
+                        new faceapi.TinyFaceDetectorOptions({
+                            inputSize,
+                            scoreThreshold
+                        }))
                         .withFaceLandmarks(true)
                         .withFaceDescriptors()
 
@@ -406,6 +409,8 @@
                         displaySize)
 
                     canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
+
+                    faceapi.draw.drawFaceLandmarks(canvas, resizedDetections)
 
                     const results = resizedDetections.map((d) => {
                         return faceMatcher.findBestMatch(d.descriptor)
@@ -448,7 +453,6 @@
                         })
 
                         drawBox.draw(canvas)
-
                     })
                 }, 300)
 
@@ -465,14 +469,13 @@
                             const detections = await faceapi
                                 .detectSingleFace(img,
                                     new faceapi
-                                    .TinyFaceDetectorOptions())
+                                        .TinyFaceDetectorOptions())
                                 .withFaceLandmarks(true)
                                 .withFaceDescriptor()
 
                             descriptions.push(detections.descriptor)
                         })
-                        return new faceapi.LabeledFaceDescriptors(`${i} | ${user.id} | ${user.nama}`,
-                            descriptions)
+                        return new faceapi.LabeledFaceDescriptors(`${i} | ${user.id} | ${user.nama}`, descriptions)
                     })
                 )
             },
@@ -501,9 +504,9 @@
                 }
 
                 preview.style.webkitTransform =
-                    `scale(0.5) rotate(0.01deg) translateY(-${h-550}px)`;
+                    `scale(0.5) rotate(0.01deg) translateY(-${h - 550}px)`;
                 preview.style.transform =
-                    `scale(0.5) rotate(0.01deg) translateY(-${h-550}px)`;
+                    `scale(0.5) rotate(0.01deg) translateY(-${h - 550}px)`;
 
                 cardBiodata.style.webkitTransform =
                     `scale(1) rotate(0.01deg) ${hh}`;
