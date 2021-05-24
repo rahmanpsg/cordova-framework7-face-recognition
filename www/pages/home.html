@@ -45,7 +45,7 @@
                 <video id="video" width="auto" height="auto" muted style="display: none;"></video>
             </div>
             <div id="keterangan" class="block">
-                {{#if first}}
+                {{#unless start}}
                 <center>
                     <lottie-player src="./assets/face-animasi.json" class="text-align-center" background="transparent"
                         speed="1" style="width: 300px; height: 300px;" loop autoplay></lottie-player>
@@ -75,8 +75,8 @@
                         {{/js_if}}
                     </div>
                 </div>
-                {{/if}}
-                {{/if}}
+                {{/js_if}}
+                {{/unless}}
             </div>
         </div>
         <!-- PopOver -->
@@ -119,15 +119,19 @@
         data: function () {
             return {
                 btnAksi: 'play',
+                start: false,
                 first: true,
                 loading: true,
                 paused: false,
-                detections: [],
-                user: {}
+                canvas: null,
+                detection: null,
+                resizedDetection: null,
+                user: {},
+                faceMatcher: []
             }
         },
         on: {
-            pageInit: function () {
+            pageInit: async function () {
                 // Deklarasi screen size
                 this.clientWidth = document.documentElement.clientWidth
                 this.clientHeight = document.documentElement.clientHeight - $('.navbar')[0].clientHeight
@@ -137,17 +141,20 @@
                 this.video = document.getElementById("video")
 
                 // Initialise DB
-                this.initDB()
+                await this.initDB()
 
                 // Load data
-                this.loadDB()
+                await this.loadDB()
 
                 // Load model untuk face recognition (face-api.js)
-                this.loadFaceDetectModels().then(() => {
-                    this.$setState({
-                        loading: false
-                    }, () => this.setIconControl('play'))
-                })
+                await this.loadFaceDetectModels()
+
+                // load data wajah dari db
+                await this.loadFaceMatcher()
+
+                this.$setState({
+                    loading: false
+                }, () => this.setIconControl('play'))
 
                 // Buat event listener untuk video
                 this.video.onplaying = (event) => {
@@ -157,10 +164,9 @@
                     }, () => {
                         this.setIconControl('pause')
 
-                        if (this.first) {
-                            this.recognizeFaces()
-                            return
-                        }
+                        this.recognizeFaces()
+
+                        if (this.start) return
 
                         this.video.style.display = "block";
                         $('#container canvas').show()
@@ -186,9 +192,8 @@
                         $('#container canvas').hide()
                         $('#keterangan').show()
 
-                        if (this.detections.length > 0) {
-                            this.extractFaceFromBox(this.video, this.detections[0].detection
-                                .box)
+                        if (!!this.detection && this.start) {
+                            this.extractFaceFromBox(this.video, this.resizedDetection.detection.box)
                         }
                     })
                 };
@@ -354,8 +359,8 @@
                 // await faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_URL)
                 // await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_URL)
             },
-            start: function () {
-                navigator.mediaDevices.getUserMedia({
+            startDetection: async function () {
+                await navigator.mediaDevices.getUserMedia({
                     audio: false,
                     video: {
                         width: {
@@ -373,92 +378,112 @@
                 });
             },
             recognizeFaces: async function () {
-                const labeledDescriptors = await this.loadLabeledImages()
-                const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5)
-
                 $('#keterangan').hide()
                 this.video.style.display = "block";
 
-                this.first = false
-
-                const canvas = faceapi.createCanvasFromMedia(this.video)
-                this.container.append(canvas);
+                this.canvas = faceapi.createCanvasFromMedia(this.video)
+                this.container.append(this.canvas);
 
                 const displaySize = {
                     width: this.video.videoWidth,
                     height: this.video.videoHeight
                 }
 
-                faceapi.matchDimensions(canvas, displaySize)
+                faceapi.matchDimensions(this.canvas, displaySize)
 
                 const inputSize = 160,
                     scoreThreshold = 0.5
 
+                let totalDetection = 0;
+                let currentDetection = null;
+
+                let label, boxColor;
+
                 this.detectionInterval = setInterval(async () => {
                     if (this.loading || this.paused) return
 
-                    this.detections = await faceapi.detectAllFaces(this.video,
-                        new faceapi.TinyFaceDetectorOptions({
+                    this.detection = await faceapi
+                        .detectSingleFace(this.video, new faceapi.TinyFaceDetectorOptions({
                             inputSize,
                             scoreThreshold
                         }))
                         .withFaceLandmarks(true)
-                        .withFaceDescriptors()
+                        .withFaceDescriptor();
 
-                    const resizedDetections = faceapi.resizeResults(this.detections,
-                        displaySize)
+                    this.canvas.getContext("2d").clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-                    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
+                    if (!this.detection) return;
 
-                    faceapi.draw.drawFaceLandmarks(canvas, resizedDetections)
+                    const bestMatch = await this.faceMatcher.findBestMatch(this.detection.descriptor)
 
-                    const results = resizedDetections.map((d) => {
-                        return faceMatcher.findBestMatch(d.descriptor)
-                    })
+                    label = 'Wajah tidak dikenali'
+                    boxColor = 'rgba(245, 84, 44)'
 
-                    let label, boxColor;
+                    const newLabel = bestMatch.label.split(' | ')
+                    const [index, id, nama] = newLabel;
 
-                    results.forEach((result, i) => {
-                        label = 'Wajah tidak dikenali'
-                        boxColor = 'rgba(245, 84, 44)'
-
-                        const newLabel = result.label.split(' | ')
-                        const [index, id, nama] = newLabel;
-
-                        if (result.label != 'unknown') {
-                            label = nama
-                            boxColor = 'rgba(44, 222, 9)';
-
-                            this.user = this.users[index]
+                    if (bestMatch.label != 'unknown') {
+                        if (currentDetection == index) {
+                            totalDetection++
                         } else {
-                            this.user = {}
+                            totalDetection = 0
                         }
 
-                        const {
-                            x,
-                            y,
-                            width,
-                            height
-                        } = resizedDetections[i].detection.box
+                        currentDetection = index
 
-                        const drawBox = new faceapi.draw.DrawBox({
-                            x: x + 30,
-                            y,
-                            width: width - 50,
-                            height
-                        }, {
-                            boxColor,
-                            label,
-                            lineWidth: 5
-                        })
+                        if (totalDetection < 6) {
+                            label = 'Sedang mengenali wajah...'
+                            boxColor = 'rgba(47, 123, 245)';
+                        } else {
+                            clearInterval(this.detectionInterval);
+                            label = nama
+                            boxColor = 'rgba(44, 222, 9)';
+                            this.user = this.users[index];
 
-                        drawBox.draw(canvas)
+                            setTimeout(() => {
+                                this.canvas.remove()
+
+                                this.btnAksi = 'play'
+                                this.video.pause()
+                                this.first = false
+                            }, 1000);
+                        }
+                    } else {
+                        this.user = {}
+                        totalDetection = 0
+                    }
+
+                    this.resizedDetection = faceapi.resizeResults(
+                        this.detection,
+                        displaySize
+                    );
+
+                    faceapi.draw.drawFaceLandmarks(this.canvas, this.resizedDetection)
+
+                    const {
+                        x,
+                        y,
+                        width,
+                        height
+                    } = this.resizedDetection.detection.box
+
+                    const drawBox = new faceapi.draw.DrawBox({
+                        x: x + 30,
+                        y,
+                        width: width - 50,
+                        height
+                    }, {
+                        boxColor,
+                        label,
+                        lineWidth: 5
                     })
+
+                    drawBox.draw(this.canvas)
                 }, 300)
 
             },
-            loadLabeledImages: function () {
-                return Promise.all(
+            loadFaceMatcher: async function () {
+                const labeledDescriptors = await Promise.all(
                     this.users.map(async (user, i) => {
                         const descriptions = []
                         const images = JSON.parse(user.foto)
@@ -466,18 +491,20 @@
                         images.map(async image => {
                             const img = await faceapi.fetchImage(
                                 `data:image/jpeg;base64,${image}`)
-                            const detections = await faceapi
+                            const detection = await faceapi
                                 .detectSingleFace(img,
                                     new faceapi
                                         .TinyFaceDetectorOptions())
                                 .withFaceLandmarks(true)
                                 .withFaceDescriptor()
 
-                            descriptions.push(detections.descriptor)
+                            descriptions.push(detection.descriptor)
                         })
                         return new faceapi.LabeledFaceDescriptors(`${i} | ${user.id} | ${user.nama}`, descriptions)
                     })
                 )
+
+                this.faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5)
             },
             extractFaceFromBox: async function (inputImage, box) {
                 const regionsToExtract = [
@@ -513,7 +540,7 @@
                 cardBiodata.style.transform =
                     `scale(1) rotate(0.01deg) ${hh}`;
             },
-            cameraControl: function () {
+            cameraControl: async function () {
                 if (this.loading) return
 
                 this.loading = true
@@ -526,25 +553,29 @@
                         return
                     }
 
+                    this.setIconControl('loading')
+                    this.$update();
+
                     this.btnAksi = 'pause'
                     this.video.play()
 
-                    if (this.first) this.start()
+                    if (this.first) await this.startDetection()
+                    this.start = true
 
                 } else {
-                    if (!this.detections.length) {
-                        this.toastDetection.open()
-                        this.loading = false
-                        return
-                    }
-
+                    // if (!this.detection) {
+                    //     this.toastDetection.open()
+                    //     this.loading = false
+                    //     return
+                    // }
+                    this.setIconControl('loading')
+                    this.$update();
+                    clearInterval(this.detectionInterval);
+                    this.canvas.remove()
+                    this.start = false
                     this.btnAksi = 'play'
                     this.video.pause()
                 }
-
-                this.setIconControl('loading')
-
-                this.$update();
             },
             setIconControl: function (control) {
                 let src,
